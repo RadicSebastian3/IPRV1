@@ -1,7 +1,9 @@
 import tkinter as tk
 from tkinter import messagebox
-import smtplib
+import email
 import re
+from tkinterdnd2 import TkinterDnD, DND_FILES
+import os
 
 # Hacker-themed colors
 BG_COLOR = "#000000"
@@ -9,64 +11,72 @@ TEXT_COLOR = "#00FF00"
 BUTTON_COLOR = "#003300"
 FONT = ("Courier", 12)
 
-def get_ip_from_email(email):
+def extract_ip_from_file(file_path):
     try:
-        # Extract domain from email
-        domain = email.split('@')[1]
-        
-        # Connect to the domain's mail server
-        server = smtplib.SMTP(domain)
-        server.set_debuglevel(1)  # Enable debug to capture headers
-        
-        # Send a test email to trigger header logging
-        server.sendmail(email, email, "Subject: IP Extraction Test")
-        
-        # Capture the debug output
-        debug_output = server.get_debuglevel()
-        server.quit()
-        
-        # Extract IP from debug output
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        # Try to parse the content as an email
+        try:
+            msg = email.message_from_string(content)
+            headers = msg.as_string()
+        except:
+            # If parsing as email fails, treat the content as raw headers
+            headers = content
+
+        # Extract IP from Received headers
         ip_pattern = r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
-        ip_match = re.search(ip_pattern, str(debug_output))
-        
-        if ip_match:
-            return ip_match.group(0)
-        else:
-            return "IP not found in headers."
+        received_headers = re.findall(r"Received:.*", headers)
+        for header in received_headers:
+            ip_match = re.search(ip_pattern, header)
+            if ip_match:
+                return ip_match.group(0)
+        return "IP not found in headers."
     except Exception as e:
         return f"Error: {str(e)}"
 
-def on_submit():
-    email = entry.get()
-    if "@" not in email:
-        messagebox.showerror("Error", "Invalid email address.")
+def on_drop(event):
+    # Get the file path from the event
+    file_path = event.data.strip("{}")  # Remove curly braces added by TkinterDnD
+    file_path = file_path.strip()  # Remove any extra whitespace
+
+    # Debug: Print the raw file path
+    print(f"Raw file path: {file_path}")
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        messagebox.showerror("Error", f"File not found: {file_path}")
         return
-    
-    ip_address = get_ip_from_email(email)
-    result_label.config(text=f"IP Address: {ip_address}")
+
+    # Debug: Print the resolved file path
+    print(f"Resolved file path: {os.path.abspath(file_path)}")
+
+    try:
+        ip_address = extract_ip_from_file(file_path)
+        result_label.config(text=f"Sender's IP: {ip_address}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to process file: {str(e)}")
 
 # Create the hacker-themed UI
-root = tk.Tk()
-root.title("FRANK'S EMAIL IP EXTRACTOR")
+root = TkinterDnD.Tk()  # Use TkinterDnD's Tk instead of tk.Tk
+root.title("IP REAPER v1.0 - BY FRANK")
 root.configure(bg=BG_COLOR)
 
 # Title label
-title_label = tk.Label(root, text="FRANK'S EMAIL IP EXTRACTOR", font=("Courier", 16, "bold"), fg=TEXT_COLOR, bg=BG_COLOR)
+title_label = tk.Label(root, text="IP REAPER v1.0", font=("Courier", 16, "bold"), fg=TEXT_COLOR, bg=BG_COLOR)
 title_label.pack(pady=10)
 
-# Email entry
-entry_label = tk.Label(root, text="Enter Email Address:", font=FONT, fg=TEXT_COLOR, bg=BG_COLOR)
-entry_label.pack(pady=5)
-entry = tk.Entry(root, font=FONT, bg=BG_COLOR, fg=TEXT_COLOR, insertbackground=TEXT_COLOR)
-entry.pack(pady=10)
-
-# Submit button
-submit_button = tk.Button(root, text="Extract IP", font=FONT, bg=BUTTON_COLOR, fg=TEXT_COLOR, command=on_submit)
-submit_button.pack(pady=10)
+# Drag-and-drop instructions
+instructions_label = tk.Label(root, text="Drag and drop an .eml or plain text file here:", font=FONT, fg=TEXT_COLOR, bg=BG_COLOR)
+instructions_label.pack(pady=10)
 
 # Result label
-result_label = tk.Label(root, text="IP Address: ", font=FONT, fg=TEXT_COLOR, bg=BG_COLOR)
+result_label = tk.Label(root, text="Sender's IP: ", font=FONT, fg=TEXT_COLOR, bg=BG_COLOR)
 result_label.pack(pady=20)
+
+# Enable drag-and-drop
+root.drop_target_register(DND_FILES)
+root.dnd_bind("<<Drop>>", on_drop)
 
 # Run the UI
 root.mainloop()
